@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "obi": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["agent/mcp_server.py"],
+      "cwd": "C:\\Users\\Mlibed\\Downloads\\obi_agent"
+    }
+  }
+}

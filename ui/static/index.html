@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OBI Agent</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #22263a;
+    --border: #2e3350;
+    --accent: #4f8ef7;
+    --accent2: #7c5cbf;
+    --text: #e8eaf0;
+    --text-dim: #8892a4;
+    --green: #3ecf8e;
+    --red: #f75050;
+    --yellow: #f7c948;
+    --tool-bg: #1e2235;
+    --tool-border: #3a4060;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Header */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 20px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .logo {
+    width: 32px; height: 32px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 14px;
+  }
+  header h1 { font-size: 16px; font-weight: 600; }
+  header p { font-size: 12px; color: var(--text-dim); margin-left: auto; }
+  #board-status {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; padding: 4px 10px;
+    border-radius: 12px; border: 1px solid var(--border);
+    background: var(--surface2);
+  }
+  .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--text-dim);
+  }
+  .dot.connected { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .dot.disconnected { background: var(--red); }
+
+  /* Main layout */
+  main {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+  }
+
+  /* Chat area */
+  #chat-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  #messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  #messages::-webkit-scrollbar { width: 6px; }
+  #messages::-webkit-scrollbar-track { background: transparent; }
+  #messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  .msg { display: flex; gap: 10px; max-width: 100%; }
+  .msg.user { flex-direction: row-reverse; }
+  .msg-avatar {
+    width: 30px; height: 30px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; flex-shrink: 0;
+  }
+  .msg.user .msg-avatar { background: linear-gradient(135deg, #5c6bc0, #7c5cbf); }
+  .msg.assistant .msg-avatar { background: linear-gradient(135deg, var(--accent), #3ecf8e); }
+  .msg-body { max-width: 75%; display: flex; flex-direction: column; gap: 4px; }
+  .msg.user .msg-body { align-items: flex-end; }
+  .msg-bubble {
+    padding: 10px 14px;
+    border-radius: 12px;
+    font-size: 14px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .msg.user .msg-bubble {
+    background: linear-gradient(135deg, #3d4a8a, #5c3d8a);
+    border-bottom-right-radius: 4px;
+  }
+  .msg.assistant .msg-bubble {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-bottom-left-radius: 4px;
+  }
+  .msg-time { font-size: 11px; color: var(--text-dim); }
+
+  /* Tool call cards */
+  .tool-call-card {
+    background: var(--tool-bg);
+    border: 1px solid var(--tool-border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 12px;
+    font-family: 'Consolas', monospace;
+    margin: 4px 0;
+    max-width: 75%;
+  }
+  .tool-call-card .tool-name {
+    color: var(--accent);
+    font-weight: 600;
+    margin-bottom: 4px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .tool-call-card .tool-args { color: var(--text-dim); }
+  .tool-result-card {
+    background: #0e1a12;
+    border: 1px solid #1e3a26;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 12px;
+    font-family: 'Consolas', monospace;
+    color: var(--green);
+    max-width: 75%;
+    max-height: 200px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  .spinner {
+    display: inline-block; width: 12px; height: 12px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Status bar */
+  #status-bar {
+    padding: 6px 20px;
+    font-size: 12px;
+    color: var(--text-dim);
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    min-height: 28px;
+  }
+
+  /* Input area */
+  #input-area {
+    padding: 16px 20px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+  }
+  #user-input {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-size: 14px;
+    resize: none;
+    max-height: 120px;
+    outline: none;
+    line-height: 1.5;
+    transition: border-color 0.15s;
+  }
+  #user-input:focus { border-color: var(--accent); }
+  #user-input::placeholder { color: var(--text-dim); }
+  #send-btn {
+    background: var(--accent);
+    border: none;
+    border-radius: 10px;
+    width: 40px; height: 40px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s, opacity 0.15s;
+    flex-shrink: 0;
+  }
+  #send-btn:hover { background: #6ba3ff; }
+  #send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  #send-btn svg { fill: white; width: 18px; height: 18px; }
+
+  /* Quick commands sidebar */
+  #sidebar {
+    width: 220px;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+  #sidebar h3 {
+    padding: 14px 16px 8px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+    border-bottom: 1px solid var(--border);
+  }
+  .quick-group { padding: 10px 12px 4px; }
+  .quick-group h4 { font-size: 11px; color: var(--text-dim); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .quick-btn {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 12px;
+    padding: 7px 10px;
+    text-align: left;
+    cursor: pointer;
+    margin-bottom: 4px;
+    transition: background 0.1s, border-color 0.1s;
+  }
+  .quick-btn:hover { background: var(--tool-bg); border-color: var(--accent); }
+
+  /* Welcome message */
+  .welcome {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-dim);
+  }
+  .welcome h2 { font-size: 20px; color: var(--text); margin-bottom: 8px; }
+  .welcome p { font-size: 13px; line-height: 1.7; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">OBI</div>
+  <h1>OBI Agent</h1>
+  <div id="board-status">
+    <div class="dot" id="status-dot"></div>
+    <span id="status-text">Checking...</span>
+  </div>
+</header>
+
+<main>
+  <div id="chat-area">
+    <div id="messages">
+      <div class="welcome">
+        <h2>On-Body Injector Agent</h2>
+        <p>Ask me anything about the OBI board.<br>
+        I can read sensors, change settings, control motors, and more.</p>
+      </div>
+    </div>
+    <div id="status-bar"></div>
+    <div id="input-area">
+      <textarea id="user-input" placeholder="Ask something... (e.g. 'what's the battery level?' or 'change state to shipping')" rows="1"></textarea>
+      <button id="send-btn" title="Send">
+        <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div id="sidebar">
+    <h3>Quick Commands</h3>
+
+    <div class="quick-group">
+      <h4>System</h4>
+      <button class="quick-btn" onclick="send('List all devices on the board')">List devices</button>
+      <button class="quick-btn" onclick="send('Show firmware versions')">Firmware versions</button>
+      <button class="quick-btn" onclick="send('What is the current state?')">Current state</button>
+      <button class="quick-btn" onclick="send('Change state to shipping')">Set state: shipping</button>
+      <button class="quick-btn" onclick="send('Change state to active')">Set state: active</button>
+    </div>
+
+    <div class="quick-group">
+      <h4>Power / Battery</h4>
+      <button class="quick-btn" onclick="send('What is the battery level and status?')">Battery status</button>
+      <button class="quick-btn" onclick="send('Show all MAX20360 attributes')">MAX20360 attrs</button>
+      <button class="quick-btn" onclick="send('Turn off the boards')">Power off board</button>
+    </div>
+
+    <div class="quick-group">
+      <h4>Sensors</h4>
+      <button class="quick-btn" onclick="send('Read the accelerometer values from adxl367')">Accelerometer (ADXL367)</button>
+      <button class="quick-btn" onclick="send('What is the temperature from the onboard sensor?')">Temperature</button>
+      <button class="quick-btn" onclick="send('Read pressure sensor status')">Pressure sensor</button>
+      <button class="quick-btn" onclick="send('Show optical PPG sensor status')">Optical PPG</button>
+    </div>
+
+    <div class="quick-group">
+      <h4>Alerts / Indication</h4>
+      <button class="quick-btn" onclick="send('Turn on the haptic motor')">Haptic: start</button>
+      <button class="quick-btn" onclick="send('Stop the haptic motor')">Haptic: stop</button>
+      <button class="quick-btn" onclick="send('Show LED status on max20360')">LED status</button>
+    </div>
+
+    <div class="quick-group">
+      <h4>Motion</h4>
+      <button class="quick-btn" onclick="send('Move the stepper motor right')">Stepper: move right</button>
+      <button class="quick-btn" onclick="send('Stop the stepper motor')">Stepper: stop</button>
+      <button class="quick-btn" onclick="send('Show tmc5262 status')">TMC5262 attrs</button>
+    </div>
+  </div>
+</main>
+
+<script>
+const messagesEl = document.getElementById('messages');
+const inputEl = document.getElementById('user-input');
+const sendBtn = document.getElementById('send-btn');
+const statusBar = document.getElementById('status-bar');
+const statusDot = document.getElementById('status-dot');
+const statusText = document.getElementById('status-text');
+
+let history = [];
+let isStreaming = false;
+
+// ---- Board status poll ----
+async function checkBoardStatus() {
+  try {
+    const res = await fetch('/board/status');
+    const data = await res.json();
+    if (data.connected) {
+      statusDot.className = 'dot connected';
+      const uri = data.uri || '';
+      const port = uri.match(/serial:(COM\d+)/)?.[1] || uri;
+      statusText.textContent = `${port} — connected`;
+    } else {
+      statusDot.className = 'dot disconnected';
+      statusText.textContent = 'Board not found';
+    }
+  } catch {
+    statusDot.className = 'dot disconnected';
+    statusText.textContent = 'Server error';
+  }
+}
+checkBoardStatus();
+setInterval(checkBoardStatus, 8000);
+
+// ---- Input auto-resize ----
+inputEl.addEventListener('input', () => {
+  inputEl.style.height = 'auto';
+  inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px';
+});
+
+inputEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+sendBtn.addEventListener('click', sendMessage);
+
+function send(text) {
+  inputEl.value = text;
+  sendMessage();
+}
+
+function now() {
+  return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function scrollToBottom() {
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function removeWelcome() {
+  const w = messagesEl.querySelector('.welcome');
+  if (w) w.remove();
+}
+
+function appendUserMsg(text) {
+  removeWelcome();
+  const el = document.createElement('div');
+  el.className = 'msg user';
+  el.innerHTML = `
+    <div class="msg-avatar">U</div>
+    <div class="msg-body">
+      <div class="msg-bubble">${escHtml(text)}</div>
+      <div class="msg-time">${now()}</div>
+    </div>`;
+  messagesEl.appendChild(el);
+  scrollToBottom();
+}
+
+function createAssistantContainer() {
+  const el = document.createElement('div');
+  el.className = 'msg assistant';
+  el.innerHTML = `
+    <div class="msg-avatar">AI</div>
+    <div class="msg-body" id="asst-body-${Date.now()}">
+      <div class="spinner" id="thinking-spinner"></div>
+    </div>`;
+  messagesEl.appendChild(el);
+  scrollToBottom();
+  return el.querySelector('.msg-body');
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function fmtJson(s) {
+  try { return JSON.stringify(JSON.parse(s), null, 2); } catch { return s; }
+}
+
+async function sendMessage() {
+  const text = inputEl.value.trim();
+  if (!text || isStreaming) return;
+
+  isStreaming = true;
+  sendBtn.disabled = true;
+  inputEl.value = '';
+  inputEl.style.height = 'auto';
+
+  appendUserMsg(text);
+  const asstBody = createAssistantContainer();
+  let finalText = '';
+  let bubbleEl = null;
+
+  function getOrCreateBubble() {
+    if (!bubbleEl) {
+      const spinner = asstBody.querySelector('.spinner');
+      if (spinner) spinner.remove();
+      bubbleEl = document.createElement('div');
+      bubbleEl.className = 'msg-bubble';
+      asstBody.appendChild(bubbleEl);
+    }
+    return bubbleEl;
+  }
+
+  try {
+    const resp = await fetch('/chat/stream', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ message: text, history })
+    });
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        let evt;
+        try { evt = JSON.parse(line.slice(6)); } catch { continue; }
+
+        if (evt.type === 'status') {
+          statusBar.textContent = evt.text;
+
+        } else if (evt.type === 'text') {
+          finalText = evt.text;
+          getOrCreateBubble().textContent = evt.text;
+          scrollToBottom();
+
+        } else if (evt.type === 'tool_call') {
+          const spinner = asstBody.querySelector('.spinner');
+          if (spinner) spinner.remove();
+          const card = document.createElement('div');
+          card.className = 'tool-call-card';
+          const inputStr = JSON.stringify(evt.input, null, 2);
+          card.innerHTML = `
+            <div class="tool-name">
+              <span class="spinner"></span>
+              <span>${escHtml(evt.name)}</span>
+            </div>
+            <div class="tool-args">${escHtml(inputStr)}</div>`;
+          asstBody.appendChild(card);
+          card._spinner = card.querySelector('.spinner');
+          card._name = evt.name;
+          scrollToBottom();
+
+        } else if (evt.type === 'tool_result') {
+          const cards = asstBody.querySelectorAll('.tool-call-card');
+          for (const card of cards) {
+            if (card._name === evt.name && card._spinner) {
+              card._spinner.remove();
+              card._spinner = null;
+              const resultEl = document.createElement('div');
+              resultEl.className = 'tool-result-card';
+              resultEl.textContent = fmtJson(evt.result);
+              card.after(resultEl);
+              break;
+            }
+          }
+          scrollToBottom();
+
+        } else if (evt.type === 'error') {
+          getOrCreateBubble().innerHTML = `<span style="color:var(--red)">Error: ${escHtml(evt.text)}</span>`;
+          scrollToBottom();
+
+        } else if (evt.type === 'done') {
+          const spinner = asstBody.querySelector('.spinner');
+          if (spinner) spinner.remove();
+          if (evt.text && !bubbleEl) {
+            finalText = evt.text;
+            getOrCreateBubble().textContent = evt.text;
+          }
+          const timeEl = document.createElement('div');
+          timeEl.className = 'msg-time';
+          timeEl.textContent = now();
+          asstBody.appendChild(timeEl);
+          statusBar.textContent = '';
+          scrollToBottom();
+        }
+      }
+    }
+
+    // Update history
+    history.push({ role: 'user', content: text });
+    if (finalText) {
+      history.push({ role: 'assistant', content: finalText });
+    }
+    // Keep history manageable
+    if (history.length > 20) history = history.slice(-20);
+
+  } catch (e) {
+    getOrCreateBubble().innerHTML = `<span style="color:var(--red)">Request failed: ${escHtml(String(e))}</span>`;
+  }
+
+  isStreaming = false;
+  sendBtn.disabled = false;
+  inputEl.focus();
+}
+</script>
+</body>
+</html>
